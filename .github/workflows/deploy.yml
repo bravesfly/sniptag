@@ -48,7 +48,7 @@ jobs:
       - name: Build application
         run: pnpm run preview:cf
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_R2_URL: ${{ secrets.CLOUDFLARE_R2_URL }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
@@ -66,7 +66,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           environment: preview
-          command: d1 migrations apply sniptag --env preview
+          command: d1 migrations apply sniptag-db --env preview
 
       - name: Deploy to Preview
         uses: cloudflare/wrangler-action@v3
@@ -93,7 +93,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '🚀 Preview deployed! Check it out at: https://sniptag-preview.effendi-official.workers.dev'
+              body: '🚀 Preview deployed! Check it out at: https://next-cf-app-preview.effendi-official.workers.dev'
             })
 
   # Deploy to production (main branch)
@@ -147,14 +147,14 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 export sniptag --output ${{ steps.backup.outputs.filename }}
+          command: d1 export sniptag-db --output ${{ steps.backup.outputs.filename }}
 
       - name: Run database migrations (Production)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply sniptag
+          command: d1 migrations apply sniptag-db
 
       - name: Deploy to Production
         uses: cloudflare/wrangler-action@v3
