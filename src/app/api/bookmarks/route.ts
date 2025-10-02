@@ -15,8 +15,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 // 鉴权函数
 function authenticateRequest(request: NextRequest): boolean {
   const { env } = getCloudflareContext();
-  const authSecret = env.BETTER_AUTH_SECRET as string | undefined;
-  const requestSecret = request.headers.get('auth_screct');
+  const authSecret = env.API_TOKEN as string | undefined;
+  const requestSecret = request.headers.get('Authorization');
 
   // 1. Check for API secret for third-party requests
   if (authSecret && requestSecret) {
@@ -409,6 +409,32 @@ async function enrichBookmarkWithTags(bookmark: any, db: any) {
 
 // ==================== API路由处理函数 ====================
 
+// 处理 CORS 预检请求
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin');
+
+  // 允许来自你的 Web 应用和特定 Chrome 扩展的请求
+  const allowedOrigins = [
+    process.env.NEXT_PUBLIC_APP_URL, // 从环境变量中获取你的应用URL
+    'chrome-extension://eiadckjccgkneelgkafmaeabookiooff'
+  ].filter(Boolean); // 过滤掉未定义的值
+
+  if (origin && allowedOrigins.includes(origin)) {
+    return new NextResponse(null, {
+      status: 204, // No Content
+      headers: {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400', // 24 hours
+      },
+    });
+  }
+
+  // 如果来源不允许，则返回 Forbidden
+  return new NextResponse('Forbidden', { status: 403 });
+}
+
 // GET - 获取所有书签或搜索书签
 export async function GET(request: NextRequest) {
   try {
@@ -570,13 +596,24 @@ export async function GET(request: NextRequest) {
 
 // POST - 创建新书签
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  const allowedOrigins = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    'chrome-extension://eiadckjccgkneelgkafmaeabookiooff'
+  ].filter(Boolean);
+
+  const corsHeaders: { [key: string]: string } = {};
+  if (origin && allowedOrigins.includes(origin)) {
+    corsHeaders['Access-Control-Allow-Origin'] = origin;
+  }
+
   // 鉴权检查
   if (!authenticateRequest(request)) {
     return unauthorizedResponse();
   }
 
   if (request.headers.get('content-type') !== 'application/json') {
-    return NextResponse.json({ success: false, error: "Invalid content type" }, { status: 400 });
+    return NextResponse.json({ success: false, error: "Invalid content type" }, { status: 400, headers: corsHeaders });
   }
 
   try {
@@ -593,12 +630,12 @@ export async function POST(request: NextRequest) {
     const url = body.url.trim();
 
     if (!validateUrl(url)) {
-      return NextResponse.json({ success: false, error: "URL格式不正确" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "URL格式不正确" }, { status: 400, headers: corsHeaders });
     }
 
     const existingBookmark = await checkUrlExists(url);
     if (existingBookmark) {
-      return NextResponse.json({ success: false, error: "该URL已经添加过了", data: existingBookmark }, { status: 409 });
+      return NextResponse.json({ success: false, error: "该URL已经添加过了", data: existingBookmark }, { status: 409, headers: corsHeaders });
     }
 
     const hasClientData = body.title || body.description || body.screenshot || (body.tags && body.tags.length > 0) || (body.tagPaths && body.tagPaths.length > 0);
@@ -674,11 +711,11 @@ export async function POST(request: NextRequest) {
     // 重新获取完整的书签数据
     const finalBookmark = await enrichBookmarkWithTags(createdBookmark, db);
 
-    return NextResponse.json({ success: true, data: finalBookmark, message: '书签创建成功' }, { status: 201 });
+    return NextResponse.json({ success: true, data: finalBookmark, message: '书签创建成功' }, { status: 201, headers: corsHeaders });
 
   } catch (error: any) {
     console.error("创建书签失败:", error);
-    return NextResponse.json({ success: false, error: `创建书签失败: ${error.message}` }, { status: 500 });
+    return NextResponse.json({ success: false, error: `创建书签失败: ${error.message}` }, { status: 500, headers: corsHeaders });
   }
 }
 
